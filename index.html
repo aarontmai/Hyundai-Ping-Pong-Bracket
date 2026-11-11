@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ping Pong Tournament Bracket</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#002c5f; --sky:#00aad2; --sand:#e4dcd3; --bg:#f6f3f2;
+    --ink:#0b1f3a; --muted:#8a96a8; --line:#c9d2de;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);min-height:100vh;position:relative;overflow-x:hidden}
+
+  /* Minimal ping pong backdrop: faint table outline, center line, net, a ball and its arc */
+  .bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .bg svg{width:100%;height:100%}
+
+  header{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:36px 24px 8px;
+    display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--sky);margin:0 0 6px}
+  h1{margin:0;font-weight:300;font-size:clamp(26px,4.5vw,40px);letter-spacing:-.5px;color:var(--navy)}
+  h1 b{font-weight:700}
+  .controls{display:flex;gap:8px}
+  button{font:500 12px Inter,sans-serif;letter-spacing:.5px;border:1px solid var(--navy);background:transparent;color:var(--navy);
+    padding:8px 14px;border-radius:2px;cursor:pointer}
+  button:hover{background:var(--navy);color:#fff}
+  .rule{position:relative;z-index:2;max-width:1200px;margin:14px auto 0;padding:0 24px}
+  .rule div{height:2px;background:linear-gradient(90deg,var(--navy) 0 64px,var(--line) 64px)}
+  .hint{position:relative;z-index:2;max-width:1200px;margin:10px auto 0;padding:0 24px;font-size:12px;color:var(--muted)}
+
+  .scroller{position:relative;z-index:2;overflow-x:auto;padding:18px 24px 48px;-webkit-overflow-scrolling:touch}
+  .bracket{position:relative;display:flex;gap:48px;min-width:1000px;max-width:1200px;margin:0 auto;min-height:620px}
+  svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+  .round{flex:1;display:flex;flex-direction:column;min-width:180px}
+  .round h2{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .slots{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:16px}
+
+  .match{background:#fff;border:1px solid var(--line);position:relative}
+  .match::before{content:"";position:absolute;left:-1px;top:-1px;bottom:-1px;width:3px;background:var(--navy)}
+  .team{display:flex;align-items:center;gap:10px;height:38px;padding:0 10px 0 12px;font-size:13px}
+  .team + .team{border-top:1px solid #eef1f5}
+  .seed{width:16px;font-size:10px;font-weight:600;color:var(--muted);text-align:right;flex:0 0 16px}
+  .name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+  input.name{border:0;outline:0;background:transparent;font:500 13px Inter,sans-serif;color:var(--ink);padding:0;height:100%}
+  input.name::placeholder{color:#c3cbd6;font-weight:400}
+  input.name:focus{box-shadow:inset 0 -2px 0 var(--sky)}
+  .adv{flex:0 0 18px;width:18px;height:18px;border-radius:50%;border:1px solid var(--line);background:#fff;cursor:pointer;padding:0}
+  .adv:hover{border-color:var(--sky);background:#fff}
+  .team.win .adv{background:var(--sky);border-color:var(--sky)}
+  .team.win{background:#f0f9fc}
+  .team.win .name{color:var(--navy);font-weight:700}
+  .team.lose .name{color:#b5bfcc}
+  .team.tbd .name{color:#c3cbd6;font-weight:400}
+  .team.tbd .adv,.team.wait .adv{visibility:hidden}
+
+  .champ{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px}
+  .champ .label{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--sky)}
+  .champ .cname{font-size:22px;font-weight:300;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;min-width:170px;min-height:36px}
+  .champ .cname.set{font-weight:700}
+  .champ svg{width:44px;height:44px}
+</style>
+</head>
+<body>
+<div class="bg">
+  <svg viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice">
+    <rect x="60" y="80" width="880" height="540" fill="none" stroke="#002c5f" stroke-opacity=".06" stroke-width="3"/>
+    <line x1="60" y1="350" x2="940" y2="350" stroke="#002c5f" stroke-opacity=".05" stroke-width="2"/>
+    <line x1="500" y1="70" x2="500" y2="630" stroke="#002c5f" stroke-opacity=".08" stroke-width="5"/>
+    <path d="M150 560 Q 330 300 520 420 T 860 200" fill="none" stroke="#00aad2" stroke-opacity=".18" stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round"/>
+    <circle cx="860" cy="200" r="10" fill="#00aad2" fill-opacity=".22"/>
+    <g transform="translate(110 600) rotate(-35)" opacity=".06"><circle r="42" fill="#002c5f"/><rect x="-9" y="36" width="18" height="56" rx="6" fill="#002c5f"/></g>
+  </svg>
+</div>
+
+<header>
+  <div>
+    <p class="eyebrow">Hyundai · Table Tennis</p>
+    <h1><b>Ping Pong</b> Tournament</h1>
+  </div>
+  <div class="controls">
+    <button id="resetBtn">Reset results</button>
+    <button id="clearBtn">Clear names</button>
+  </div>
+</header>
+<div class="rule"><div></div></div>
+<p class="hint">Type team names in Round 1 and the seeded byes · tap the circle to advance a team</p>
+
+<div class="scroller">
+  <div class="bracket" id="bracket">
+    <svg class="links" id="links"></svg>
+    <div class="round"><h2>Round 1</h2><div class="slots" id="r1"></div></div>
+    <div class="round"><h2>Quarterfinals</h2><div class="slots" id="r2"></div></div>
+    <div class="round"><h2>Semifinals</h2><div class="slots" id="r3"></div></div>
+    <div class="round"><h2>Final</h2><div class="slots" id="r4"></div></div>
+    <div class="round"><h2>&nbsp;</h2><div class="slots">
+      <div class="champ" id="champ">
+        <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="#002c5f" stroke-width="1.5"/><circle cx="22" cy="22" r="7" fill="#00aad2"/></svg>
+        <div class="label">Champion</div>
+        <div class="cname" id="champName"></div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<script>
+const KEY="hy-pp-bracket-v1";
+let state={teams:Array(12).fill(""),w:{}};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.teams)&&s.teams.length===12)state=s;}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
+
+const M={
+  a:{s:[{seed:8},{seed:9}]}, b:{s:[{seed:5},{seed:12}]}, c:{s:[{seed:6},{seed:11}]}, d:{s:[{seed:7},{seed:10}]},
+  q1:{s:[{seed:1},{from:"a"}]}, q2:{s:[{seed:4},{from:"b"}]}, q3:{s:[{seed:3},{from:"c"}]}, q4:{s:[{seed:2},{from:"d"}]},
+  s1:{s:[{from:"q1"},{from:"q2"}]}, s2:{s:[{from:"q3"},{from:"q4"}]}, f:{s:[{from:"s1"},{from:"s2"}]}
+};
+const order={1:["a","b","c","d"],2:["q1","q2","q3","q4"],3:["s1","s2"],4:["f"]};
+const ent=src=>src.seed||state.w[src.from]||null;
+const label=n=>state.teams[n-1]||("Seed "+n);
+
+function clearDown(id){
+  for(const [mid,m] of Object.entries(M)){
+    if(m.s.some(x=>x.from===id)&&state.w[mid]&&!m.s.map(ent).includes(state.w[mid])){delete state.w[mid];clearDown(mid);}
+  }
+}
+function pick(id,seed){ if(state.w[id]===seed)delete state.w[id]; else state.w[id]=seed; clearDown(id); save(); render(); }
+
+function row(id,src,i,ents){
+  const seed=ent(src), w=state.w[id], ready=ents[0]&&ents[1];
+  const r=document.createElement("div"); r.className="team";
+  if(!seed){ r.classList.add("tbd"); r.innerHTML='<span class="seed"></span><span class="name">—</span><button class="adv"></button>'; return r; }
+  if(w) r.classList.add(w===seed?"win":"lose"); else if(!ready) r.classList.add("wait");
+  r.innerHTML=`<span class="seed">${seed}</span>`;
+  if(src.seed){ // editable entry slot
+    const inp=document.createElement("input"); inp.className="name"; inp.placeholder="Team name"; inp.maxLength=30;
+    inp.value=state.teams[seed-1];
+    inp.oninput=()=>{state.teams[seed-1]=inp.value; save(); syncNames(seed);};
+    r.appendChild(inp);
+  } else {
+    const s=document.createElement("span"); s.className="name"; s.dataset.seed=seed; s.textContent=label(seed); r.appendChild(s);
+  }
+  const b=document.createElement("button"); b.className="adv"; b.title="Advance";
+  if(ready) b.onclick=()=>pick(id,seed);
+  r.appendChild(b); return r;
+}
+function syncNames(seed){
+  document.querySelectorAll(`span.name[data-seed="${seed}"]`).forEach(el=>el.textContent=label(seed));
+  updateChamp();
+}
+function updateChamp(){
+  const c=state.w.f, el=document.getElementById("champName");
+  el.textContent=c?label(c):""; el.classList.toggle("set",!!c);
+}
+function render(){
+  for(const r of [1,2,3,4]){
+    const col=document.getElementById("r"+r); col.innerHTML="";
+    for(const id of order[r]){
+      const m=M[id], el=document.createElement("div"); el.className="match"; el.id="m-"+id;
+      const ents=m.s.map(ent);
+      m.s.forEach((src,i)=>el.appendChild(row(id,src,i,ents)));
+      col.appendChild(el);
+    }
+  }
+  updateChamp(); requestAnimationFrame(links);
+}
+function links(){
+  const box=document.getElementById("bracket").getBoundingClientRect(); let p="";
+  for(const [id,m] of Object.entries(M)){
+    const rows=document.getElementById("m-"+id).querySelectorAll(".team");
+    m.s.forEach((src,i)=>{
+      if(!src.from)return;
+      const f=document.getElementById("m-"+src.from).getBoundingClientRect(), t=rows[i].getBoundingClientRect();
+      const x1=f.right-box.left,y1=f.top+f.height/2-box.top,x2=t.left-box.left,y2=t.top+t.height/2-box.top,mx=(x1+x2)/2;
+      const on=!!state.w[src.from];
+      p+=`<path d="M${x1} ${y1}H${mx}V${y2}H${x2}" fill="none" stroke="${on?'#00aad2':'#c9d2de'}" stroke-width="${on?2:1}"/>`;
+    });
+  }
+  const f=document.getElementById("m-f").getBoundingClientRect(), c=document.getElementById("champ").getBoundingClientRect();
+  p+=`<path d="M${f.right-box.left} ${f.top+f.height/2-box.top}H${c.left-box.left-8}" stroke="${state.w.f?'#00aad2':'#c9d2de'}" stroke-width="${state.w.f?2:1}" fill="none"/>`;
+  document.getElementById("links").innerHTML=p;
+}
+addEventListener("resize",links);
+if(document.fonts)document.fonts.ready.then(links);
+
+function twoTap(btn,text,fn){let armed=false,t;btn.onclick=()=>{
+  if(!armed){armed=true;btn.textContent="Tap again to confirm";t=setTimeout(()=>{armed=false;btn.textContent=text},2500);return;}
+  clearTimeout(t);armed=false;btn.textContent=text;fn();}}
+twoTap(document.getElementById("resetBtn"),"Reset results",()=>{state.w={};save();render();});
+twoTap(document.getElementById("clearBtn"),"Clear names",()=>{state.teams=Array(12).fill("");state.w={};save();render();});
+render();
+</script>
+</body>
+</html>
