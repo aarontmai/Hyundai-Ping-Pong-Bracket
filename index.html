@@ -32,7 +32,7 @@
   .hint{position:relative;z-index:2;max-width:1400px;margin:10px auto 0;padding:0 24px;font-size:12px;color:var(--muted)}
 
   .scroller{position:relative;z-index:2;overflow-x:auto;padding:18px 24px 48px;-webkit-overflow-scrolling:touch}
-  .bracket{position:relative;display:flex;gap:26px;min-width:1180px;max-width:1400px;margin:0 auto;min-height:680px}
+  .bracket{position:relative;display:flex;gap:26px;min-width:1180px;max-width:1400px;margin:0 auto;min-height:720px}
   svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
   .round{flex:1;display:flex;flex-direction:column;min-width:150px}
   .round.right h2{text-align:right}
@@ -97,12 +97,12 @@
   </div>
 </header>
 <div class="rule"><div></div></div>
-<p class="hint">Type all 14 team names in any open slot · tap the circle to advance a team</p>
+<p class="hint">Type all 16 team names in Round 1 · tap the circle to advance a team</p>
 
 <div class="scroller">
   <div class="bracket" id="bracket">
     <svg class="links" id="links"></svg>
-    <div class="round"><h2>Round 1</h2><div class="slots" id="L1"></div></div>
+    <div class="round"><h2>Round of 16</h2><div class="slots" id="L1"></div></div>
     <div class="round"><h2>Quarterfinals</h2><div class="slots abs" id="L2"></div></div>
     <div class="round"><h2>Semifinal</h2><div class="slots abs" id="L3"></div></div>
     <div class="round center"><h2>Final</h2><div class="slots" id="C">
@@ -115,24 +115,24 @@
     </div></div>
     <div class="round right"><h2>Semifinal</h2><div class="slots abs" id="R3"></div></div>
     <div class="round right"><h2>Quarterfinals</h2><div class="slots abs" id="R2"></div></div>
-    <div class="round right"><h2>Round 1</h2><div class="slots" id="R1"></div></div>
+    <div class="round right"><h2>Round of 16</h2><div class="slots" id="R1"></div></div>
   </div>
 </div>
 
 <script>
-const KEY="hy-pp-bracket-v2"; const N=14;
+const KEY="hy-pp-bracket-v3"; const N=16;
 let state={teams:Array(N).fill(""),w:{}};
 try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.teams)&&s.teams.length===N)state=s;}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
 
 const M={
-  a:{s:[{seed:1},{seed:2}]}, b:{s:[{seed:3},{seed:4}]}, e:{s:[{seed:5},{seed:6}]},
-  c:{s:[{seed:8},{seed:9}]}, d:{s:[{seed:10},{seed:11}]}, g:{s:[{seed:12},{seed:13}]},
-  q1:{s:[{seed:7},{from:"a"}]}, q2:{s:[{from:"b"},{from:"e"}]},
-  q3:{s:[{seed:14},{from:"c"}]}, q4:{s:[{from:"d"},{from:"g"}]},
+  a:{s:[{seed:1},{seed:2}]}, b:{s:[{seed:3},{seed:4}]}, c:{s:[{seed:5},{seed:6}]}, d:{s:[{seed:7},{seed:8}]},
+  e:{s:[{seed:9},{seed:10}]}, f2:{s:[{seed:11},{seed:12}]}, g:{s:[{seed:13},{seed:14}]}, h:{s:[{seed:15},{seed:16}]},
+  q1:{s:[{from:"a"},{from:"b"}]}, q2:{s:[{from:"c"},{from:"d"}]},
+  q3:{s:[{from:"e"},{from:"f2"}]}, q4:{s:[{from:"g"},{from:"h"}]},
   s1:{s:[{from:"q1"},{from:"q2"}]}, s2:{s:[{from:"q3"},{from:"q4"}]}, f:{s:[{from:"s1"},{from:"s2"}]}
 };
-const order={L1:["a","b","e"],L2:["q1","q2"],L3:["s1"],F:["f"],R3:["s2"],R2:["q3","q4"],R1:["c","d","g"]};
+const order={L1:["a","b","c","d"],L2:["q1","q2"],L3:["s1"],F:["f"],R3:["s2"],R2:["q3","q4"],R1:["e","f2","g","h"]};
 const ent=src=>src.seed||state.w[src.from]||null;
 const label=n=>state.teams[n-1]||"Unnamed team";
 
@@ -182,7 +182,7 @@ function render(){
   updateChamp(); layout(); requestAnimationFrame(links);
 }
 // Place each later-round match midway between the matches that feed it
-const feeds={q1:["a"],q2:["b","e"],q3:["c"],q4:["d","g"],s1:["q1","q2"],s2:["q3","q4"]};
+const feeds={q1:["a","b"],q2:["c","d"],q3:["e","f2"],q4:["g","h"],s1:["q1","q2"],s2:["q3","q4"]};
 function layout(){
   for(const col of ["L2","R2","L3","R3"]){
     const c=document.getElementById(col), top=c.getBoundingClientRect().top;
