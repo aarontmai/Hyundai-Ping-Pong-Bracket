@@ -18,7 +18,7 @@
   .bg{position:fixed;inset:0;z-index:0;pointer-events:none}
   .bg svg{width:100%;height:100%}
 
-  header{position:relative;z-index:2;max-width:1200px;margin:0 auto;padding:36px 24px 8px;
+  header{position:relative;z-index:2;max-width:1400px;margin:0 auto;padding:36px 24px 8px;
     display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
   .eyebrow{font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--sky);margin:0 0 6px}
   h1{margin:0;font-weight:300;font-size:clamp(26px,4.5vw,40px);letter-spacing:-.5px;color:var(--navy)}
@@ -27,14 +27,17 @@
   button{font:500 12px Inter,sans-serif;letter-spacing:.5px;border:1px solid var(--navy);background:transparent;color:var(--navy);
     padding:8px 14px;border-radius:2px;cursor:pointer}
   button:hover{background:var(--navy);color:#fff}
-  .rule{position:relative;z-index:2;max-width:1200px;margin:14px auto 0;padding:0 24px}
+  .rule{position:relative;z-index:2;max-width:1400px;margin:14px auto 0;padding:0 24px}
   .rule div{height:2px;background:linear-gradient(90deg,var(--navy) 0 64px,var(--line) 64px)}
-  .hint{position:relative;z-index:2;max-width:1200px;margin:10px auto 0;padding:0 24px;font-size:12px;color:var(--muted)}
+  .hint{position:relative;z-index:2;max-width:1400px;margin:10px auto 0;padding:0 24px;font-size:12px;color:var(--muted)}
 
   .scroller{position:relative;z-index:2;overflow-x:auto;padding:18px 24px 48px;-webkit-overflow-scrolling:touch}
-  .bracket{position:relative;display:flex;gap:48px;min-width:1000px;max-width:1200px;margin:0 auto;min-height:620px}
+  .bracket{position:relative;display:flex;gap:26px;min-width:1180px;max-width:1400px;margin:0 auto;min-height:620px}
   svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
-  .round{flex:1;display:flex;flex-direction:column;min-width:180px}
+  .round{flex:1;display:flex;flex-direction:column;min-width:150px}
+  .round.right h2{text-align:right}
+  .round.center h2{text-align:center}
+  .round.center{min-width:180px}
   .round h2{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
   .slots{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:16px}
 
@@ -55,10 +58,16 @@
   .team.lose .name{color:#b5bfcc}
   .team.tbd .name{color:#c3cbd6;font-weight:400}
   .team.tbd .adv,.team.wait .adv{visibility:hidden}
+  .right .match::before{left:auto;right:-1px}
+  .right .team{flex-direction:row-reverse;padding:0 12px 0 10px}
+  .right .seed{text-align:left}
+  .right .name,.right input.name{text-align:right}
+  .center .match::before{width:100%;height:3px;bottom:auto;left:0;top:-1px}
+  .center .slots{justify-content:center;gap:22px}
 
-  .champ{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px}
+  .champ{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center}
   .champ .label{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--sky)}
-  .champ .cname{font-size:22px;font-weight:300;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;min-width:170px;min-height:36px}
+  .champ .cname{font-size:22px;font-weight:300;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;min-width:170px;min-height:36px;text-align:center}
   .champ .cname.set{font-weight:700}
   .champ svg{width:44px;height:44px}
 </style>
@@ -91,17 +100,20 @@
 <div class="scroller">
   <div class="bracket" id="bracket">
     <svg class="links" id="links"></svg>
-    <div class="round"><h2>Round 1</h2><div class="slots" id="r1"></div></div>
-    <div class="round"><h2>Quarterfinals</h2><div class="slots" id="r2"></div></div>
-    <div class="round"><h2>Semifinals</h2><div class="slots" id="r3"></div></div>
-    <div class="round"><h2>Final</h2><div class="slots" id="r4"></div></div>
-    <div class="round"><h2>&nbsp;</h2><div class="slots">
+    <div class="round"><h2>Round 1</h2><div class="slots" id="L1"></div></div>
+    <div class="round"><h2>Quarterfinals</h2><div class="slots" id="L2"></div></div>
+    <div class="round"><h2>Semifinal</h2><div class="slots" id="L3"></div></div>
+    <div class="round center"><h2>Final</h2><div class="slots" id="C">
       <div class="champ" id="champ">
         <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="#002c5f" stroke-width="1.5"/><circle cx="22" cy="22" r="7" fill="#00aad2"/></svg>
         <div class="label">Champion</div>
         <div class="cname" id="champName"></div>
       </div>
+      <div id="F"></div>
     </div></div>
+    <div class="round right"><h2>Semifinal</h2><div class="slots" id="R3"></div></div>
+    <div class="round right"><h2>Quarterfinals</h2><div class="slots" id="R2"></div></div>
+    <div class="round right"><h2>Round 1</h2><div class="slots" id="R1"></div></div>
   </div>
 </div>
 
@@ -116,7 +128,7 @@ const M={
   q1:{s:[{seed:1},{from:"a"}]}, q2:{s:[{seed:4},{from:"b"}]}, q3:{s:[{seed:3},{from:"c"}]}, q4:{s:[{seed:2},{from:"d"}]},
   s1:{s:[{from:"q1"},{from:"q2"}]}, s2:{s:[{from:"q3"},{from:"q4"}]}, f:{s:[{from:"s1"},{from:"s2"}]}
 };
-const order={1:["a","b","c","d"],2:["q1","q2","q3","q4"],3:["s1","s2"],4:["f"]};
+const order={L1:["a","b"],L2:["q1","q2"],L3:["s1"],F:["f"],R3:["s2"],R2:["q3","q4"],R1:["c","d"]};
 const ent=src=>src.seed||state.w[src.from]||null;
 const label=n=>state.teams[n-1]||("Seed "+n);
 
@@ -154,8 +166,8 @@ function updateChamp(){
   el.textContent=c?label(c):""; el.classList.toggle("set",!!c);
 }
 function render(){
-  for(const r of [1,2,3,4]){
-    const col=document.getElementById("r"+r); col.innerHTML="";
+  for(const r of Object.keys(order)){
+    const col=document.getElementById(r); col.innerHTML="";
     for(const id of order[r]){
       const m=M[id], el=document.createElement("div"); el.className="match"; el.id="m-"+id;
       const ents=m.s.map(ent);
@@ -172,13 +184,14 @@ function links(){
     m.s.forEach((src,i)=>{
       if(!src.from)return;
       const f=document.getElementById("m-"+src.from).getBoundingClientRect(), t=rows[i].getBoundingClientRect();
-      const x1=f.right-box.left,y1=f.top+f.height/2-box.top,x2=t.left-box.left,y2=t.top+t.height/2-box.top,mx=(x1+x2)/2;
+      const ltr=f.left<t.left;
+      const x1=(ltr?f.right:f.left)-box.left,y1=f.top+f.height/2-box.top,x2=(ltr?t.left:t.right)-box.left,y2=t.top+t.height/2-box.top,mx=(x1+x2)/2;
       const on=!!state.w[src.from];
       p+=`<path d="M${x1} ${y1}H${mx}V${y2}H${x2}" fill="none" stroke="${on?'#00aad2':'#c9d2de'}" stroke-width="${on?2:1}"/>`;
     });
   }
-  const f=document.getElementById("m-f").getBoundingClientRect(), c=document.getElementById("champ").getBoundingClientRect();
-  p+=`<path d="M${f.right-box.left} ${f.top+f.height/2-box.top}H${c.left-box.left-8}" stroke="${state.w.f?'#00aad2':'#c9d2de'}" stroke-width="${state.w.f?2:1}" fill="none"/>`;
+  const f=document.getElementById("m-f").getBoundingClientRect(), c=document.getElementById("champName").getBoundingClientRect();
+  p+=`<path d="M${f.left+f.width/2-box.left} ${f.top-box.top}V${c.bottom-box.top+4}" stroke="${state.w.f?'#00aad2':'#c9d2de'}" stroke-width="${state.w.f?2:1}" fill="none"/>`;
   document.getElementById("links").innerHTML=p;
 }
 addEventListener("resize",links);
