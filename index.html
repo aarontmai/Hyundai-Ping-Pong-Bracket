@@ -32,7 +32,7 @@
   .hint{position:relative;z-index:2;max-width:1400px;margin:10px auto 0;padding:0 24px;font-size:12px;color:var(--muted)}
 
   .scroller{position:relative;z-index:2;overflow-x:auto;padding:18px 24px 48px;-webkit-overflow-scrolling:touch}
-  .bracket{position:relative;display:flex;gap:26px;min-width:1180px;max-width:1400px;margin:0 auto;min-height:620px}
+  .bracket{position:relative;display:flex;gap:26px;min-width:1180px;max-width:1400px;margin:0 auto;min-height:680px}
   svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
   .round{flex:1;display:flex;flex-direction:column;min-width:150px}
   .round.right h2{text-align:right}
@@ -40,6 +40,8 @@
   .round.center{min-width:180px}
   .round h2{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
   .slots{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:16px}
+  .slots.abs{position:relative;display:block}
+  .slots.abs .match{position:absolute;left:0;right:0}
 
   .match{background:#fff;border:1px solid var(--line);position:relative}
   .match::before{content:"";position:absolute;left:-1px;top:-1px;bottom:-1px;width:3px;background:var(--navy)}
@@ -95,14 +97,14 @@
   </div>
 </header>
 <div class="rule"><div></div></div>
-<p class="hint">Type all 12 team names in any open slot · tap the circle to advance a team</p>
+<p class="hint">Type all 14 team names in any open slot · tap the circle to advance a team</p>
 
 <div class="scroller">
   <div class="bracket" id="bracket">
     <svg class="links" id="links"></svg>
     <div class="round"><h2>Round 1</h2><div class="slots" id="L1"></div></div>
-    <div class="round"><h2>Quarterfinals</h2><div class="slots" id="L2"></div></div>
-    <div class="round"><h2>Semifinal</h2><div class="slots" id="L3"></div></div>
+    <div class="round"><h2>Quarterfinals</h2><div class="slots abs" id="L2"></div></div>
+    <div class="round"><h2>Semifinal</h2><div class="slots abs" id="L3"></div></div>
     <div class="round center"><h2>Final</h2><div class="slots" id="C">
       <div class="champ" id="champ">
         <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="#002c5f" stroke-width="1.5"/><circle cx="22" cy="22" r="7" fill="#00aad2"/></svg>
@@ -111,24 +113,26 @@
       </div>
       <div id="F"></div>
     </div></div>
-    <div class="round right"><h2>Semifinal</h2><div class="slots" id="R3"></div></div>
-    <div class="round right"><h2>Quarterfinals</h2><div class="slots" id="R2"></div></div>
+    <div class="round right"><h2>Semifinal</h2><div class="slots abs" id="R3"></div></div>
+    <div class="round right"><h2>Quarterfinals</h2><div class="slots abs" id="R2"></div></div>
     <div class="round right"><h2>Round 1</h2><div class="slots" id="R1"></div></div>
   </div>
 </div>
 
 <script>
-const KEY="hy-pp-bracket-v1";
-let state={teams:Array(12).fill(""),w:{}};
-try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.teams)&&s.teams.length===12)state=s;}catch(e){}
+const KEY="hy-pp-bracket-v2"; const N=14;
+let state={teams:Array(N).fill(""),w:{}};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.teams)&&s.teams.length===N)state=s;}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
 
 const M={
-  a:{s:[{seed:8},{seed:9}]}, b:{s:[{seed:5},{seed:12}]}, c:{s:[{seed:6},{seed:11}]}, d:{s:[{seed:7},{seed:10}]},
-  q1:{s:[{seed:1},{from:"a"}]}, q2:{s:[{seed:4},{from:"b"}]}, q3:{s:[{seed:3},{from:"c"}]}, q4:{s:[{seed:2},{from:"d"}]},
+  a:{s:[{seed:1},{seed:2}]}, b:{s:[{seed:3},{seed:4}]}, e:{s:[{seed:5},{seed:6}]},
+  c:{s:[{seed:8},{seed:9}]}, d:{s:[{seed:10},{seed:11}]}, g:{s:[{seed:12},{seed:13}]},
+  q1:{s:[{seed:7},{from:"a"}]}, q2:{s:[{from:"b"},{from:"e"}]},
+  q3:{s:[{seed:14},{from:"c"}]}, q4:{s:[{from:"d"},{from:"g"}]},
   s1:{s:[{from:"q1"},{from:"q2"}]}, s2:{s:[{from:"q3"},{from:"q4"}]}, f:{s:[{from:"s1"},{from:"s2"}]}
 };
-const order={L1:["a","b"],L2:["q1","q2"],L3:["s1"],F:["f"],R3:["s2"],R2:["q3","q4"],R1:["c","d"]};
+const order={L1:["a","b","e"],L2:["q1","q2"],L3:["s1"],F:["f"],R3:["s2"],R2:["q3","q4"],R1:["c","d","g"]};
 const ent=src=>src.seed||state.w[src.from]||null;
 const label=n=>state.teams[n-1]||"Unnamed team";
 
@@ -175,7 +179,20 @@ function render(){
       col.appendChild(el);
     }
   }
-  updateChamp(); requestAnimationFrame(links);
+  updateChamp(); layout(); requestAnimationFrame(links);
+}
+// Place each later-round match midway between the matches that feed it
+const feeds={q1:["a"],q2:["b","e"],q3:["c"],q4:["d","g"],s1:["q1","q2"],s2:["q3","q4"]};
+function layout(){
+  for(const col of ["L2","R2","L3","R3"]){
+    const c=document.getElementById(col), top=c.getBoundingClientRect().top;
+    for(const id of order[col]){
+      const el=document.getElementById("m-"+id);
+      const ys=feeds[id].map(f=>{const r=document.getElementById("m-"+f).getBoundingClientRect();return r.top+r.height/2;});
+      const mid=ys.reduce((x,y)=>x+y,0)/ys.length;
+      el.style.top=(mid-top-el.offsetHeight/2)+"px";
+    }
+  }
 }
 function links(){
   const box=document.getElementById("bracket").getBoundingClientRect(); let p="";
@@ -194,14 +211,14 @@ function links(){
   p+=`<path d="M${f.left+f.width/2-box.left} ${f.top-box.top}V${c.bottom-box.top+4}" stroke="${state.w.f?'#00aad2':'#c9d2de'}" stroke-width="${state.w.f?2:1}" fill="none"/>`;
   document.getElementById("links").innerHTML=p;
 }
-addEventListener("resize",links);
-if(document.fonts)document.fonts.ready.then(links);
+addEventListener("resize",()=>{layout();links();});
+if(document.fonts)document.fonts.ready.then(()=>{layout();links();});
 
 function twoTap(btn,text,fn){let armed=false,t;btn.onclick=()=>{
   if(!armed){armed=true;btn.textContent="Tap again to confirm";t=setTimeout(()=>{armed=false;btn.textContent=text},2500);return;}
   clearTimeout(t);armed=false;btn.textContent=text;fn();}}
 twoTap(document.getElementById("resetBtn"),"Reset results",()=>{state.w={};save();render();});
-twoTap(document.getElementById("clearBtn"),"Clear names",()=>{state.teams=Array(12).fill("");state.w={};save();render();});
+twoTap(document.getElementById("clearBtn"),"Clear names",()=>{state.teams=Array(N).fill("");state.w={};save();render();});
 render();
 </script>
 </body>
