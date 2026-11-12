@@ -72,6 +72,22 @@
   .champ .cname{font-size:22px;font-weight:300;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;min-width:170px;min-height:36px;text-align:center}
   .champ .cname.set{font-weight:700}
   .champ svg{width:44px;height:44px}
+  .status{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-right:6px}
+  .status i{width:7px;height:7px;border-radius:50%;background:#c9d2de;display:inline-block}
+  .status.live i{background:#2bb673}.status.saving i{background:var(--sky)}.status.err i{background:#d64545}
+  .controls{align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .viewer .admin-only{display:none}
+  .viewer .adv{display:none}
+  .modal{position:fixed;inset:0;background:#0b1f3a66;z-index:20;display:none;align-items:center;justify-content:center;padding:16px}
+  .modal.open{display:flex}
+  .modal form{background:#fff;padding:22px;width:min(340px,100%);border-top:3px solid var(--navy)}
+  .modal h3{margin:0 0 4px;font-weight:600;color:var(--navy)}
+  .modal p{margin:0 0 14px;font-size:13px;color:var(--muted)}
+  .modal input{width:100%;font:15px Inter,sans-serif;padding:10px;border:1px solid var(--line);outline:0}
+  .modal input:focus{border-color:var(--sky)}
+  .modal .err{color:#d64545;font-size:12px;min-height:16px;margin:6px 0 0}
+  .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  .modal .primary{background:var(--navy);color:#fff}
 </style>
 </head>
 <body>
@@ -92,12 +108,14 @@
     <h1><b>Ping Pong</b> Tournament</h1>
   </div>
   <div class="controls">
-    <button id="resetBtn">Reset results</button>
-    <button id="clearBtn">Clear names</button>
+    <span class="status" id="status"><i></i><span>Local</span></span>
+    <button id="resetBtn" class="admin-only">Reset results</button>
+    <button id="clearBtn" class="admin-only">Clear names</button>
+    <button id="adminBtn">Admin</button>
   </div>
 </header>
 <div class="rule"><div></div></div>
-<p class="hint">Type all 16 team names in Round 1 · tap the circle to advance a team</p>
+<p class="hint" id="hint">Type all 16 team names in Round 1 · tap the circle to advance a team</p>
 
 <div class="scroller">
   <div class="bracket" id="bracket">
@@ -119,11 +137,59 @@
   </div>
 </div>
 
+<div class="modal" id="modal">
+  <form id="pinForm">
+    <h3>Admin access</h3>
+    <p>Enter the passcode to edit names and results.</p>
+    <input type="password" id="pinInput" autocomplete="current-password" placeholder="Passcode">
+    <div class="err" id="pinErr"></div>
+    <div class="row"><button type="button" id="pinCancel">Cancel</button><button type="submit" class="primary">Unlock</button></div>
+  </form>
+</div>
+
 <script>
-const KEY="hy-pp-bracket-v3"; const N=16;
-let state={teams:Array(N).fill(""),w:{}};
-try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.teams)&&s.teams.length===N)state=s;}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
+// ---- Shared storage: Google Sheets via an Apps Script web app. Leave blank for local-only mode. ----
+const SHEET_API = "";
+// -----------------------------------------------------------------------------------------------
+const REMOTE=!!SHEET_API;
+const KEY="hy-pp-bracket-v3", PINKEY="hy-pp-admin-pin", N=16;
+const blank=()=>({teams:Array(N).fill(""),w:{}});
+const norm=d=>{const t=(d&&Array.isArray(d.teams))?d.teams.slice(0,N):[];while(t.length<N)t.push("");return{teams:t.map(x=>x==null?"":String(x)),w:(d&&d.w&&typeof d.w==="object")?d.w:{}};};
+let state=blank();
+try{state=norm(JSON.parse(localStorage.getItem(KEY)));}catch(e){}
+let pin=null; try{pin=localStorage.getItem(PINKEY);}catch(e){}
+let isAdmin=!REMOTE, dirty=false, saveTimer=null, lastRemote=null;
+
+// text/plain body keeps this a "simple" request, which Apps Script accepts cross-origin
+function post(body){return fetch(SHEET_API,{method:"POST",body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();});}
+const checkPin=p=>post({pin:p,check:true}).then(r=>r&&r.ok===true);
+function setStatus(cls,text){const s=document.getElementById("status");s.className="status "+cls;s.querySelector("span").textContent=text;}
+
+const save=()=>{
+  try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}
+  if(!REMOTE||!isAdmin)return;
+  dirty=true; setStatus("saving","Saving…"); clearTimeout(saveTimer);
+  saveTimer=setTimeout(push,450);
+};
+function push(){
+  const snapshot=JSON.parse(JSON.stringify(state));
+  post({pin:pin,data:snapshot}).then(res=>{
+    if(res&&res.ok===true){ if(JSON.stringify(snapshot)===JSON.stringify(state)){dirty=false;lastRemote=JSON.stringify(snapshot);} setStatus("live","Saved"); }
+    else { lock(); setStatus("err","Passcode changed"); }
+  }).catch(()=>{setStatus("err","Not saved – retrying");saveTimer=setTimeout(push,3000);});
+}
+function pull(){
+  if(!REMOTE)return;
+  fetch(SHEET_API+(SHEET_API.includes("?")?"&":"?")+"t="+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json();}).then(data=>{
+    const incoming=JSON.stringify(norm(data));
+    if(!dirty) setStatus("live","Live");
+    if(dirty||incoming===lastRemote)return;
+    const a=document.activeElement; if(a&&a.tagName==="INPUT"&&a.closest("#bracket"))return;
+    lastRemote=incoming; state=JSON.parse(incoming);
+    try{localStorage.setItem(KEY,incoming)}catch(e){}
+    render();
+  }).catch(()=>{ if(!dirty) setStatus("err","Offline"); });
+}
 
 const M={
   a:{s:[{seed:1},{seed:2}]}, b:{s:[{seed:3},{seed:4}]}, c:{s:[{seed:5},{seed:6}]}, d:{s:[{seed:7},{seed:8}]},
@@ -149,7 +215,7 @@ function row(id,src,i,ents){
   if(!seed){ r.classList.add("tbd"); r.innerHTML='<span class="name">—</span><button class="adv"></button>'; return r; }
   if(w) r.classList.add(w===seed?"win":"lose"); else if(!ready) r.classList.add("wait");
   r.innerHTML="";
-  if(src.seed){ // editable entry slot
+  if(src.seed&&isAdmin){ // editable entry slot
     const inp=document.createElement("input"); inp.className="name"; inp.placeholder="Team name"; inp.maxLength=30;
     inp.value=state.teams[seed-1];
     inp.oninput=()=>{state.teams[seed-1]=inp.value; save(); syncNames(seed);};
@@ -179,6 +245,10 @@ function render(){
       col.appendChild(el);
     }
   }
+  document.body.classList.toggle("viewer",!isAdmin);
+  document.getElementById("adminBtn").textContent=isAdmin?"Lock":"Admin";
+  document.getElementById("adminBtn").style.display=REMOTE?"":"none";
+  document.getElementById("hint").textContent=isAdmin?"Type all 16 team names in Round 1 · tap the circle to advance a team":"Live bracket · updates automatically";
   updateChamp(); layout(); requestAnimationFrame(links);
 }
 // Place each later-round match midway between the matches that feed it
@@ -219,6 +289,29 @@ function twoTap(btn,text,fn){let armed=false,t;btn.onclick=()=>{
   clearTimeout(t);armed=false;btn.textContent=text;fn();}}
 twoTap(document.getElementById("resetBtn"),"Reset results",()=>{state.w={};save();render();});
 twoTap(document.getElementById("clearBtn"),"Clear names",()=>{state.teams=Array(N).fill("");state.w={};save();render();});
+// Admin unlock
+const modal=document.getElementById("modal"), pinInput=document.getElementById("pinInput"), pinErr=document.getElementById("pinErr");
+function lock(){isAdmin=false;pin=null;try{localStorage.removeItem(PINKEY)}catch(e){}render();}
+document.getElementById("adminBtn").onclick=()=>{
+  if(isAdmin){lock();return;}
+  pinErr.textContent="";pinInput.value="";modal.classList.add("open");setTimeout(()=>pinInput.focus(),50);
+};
+document.getElementById("pinCancel").onclick=()=>modal.classList.remove("open");
+document.getElementById("pinForm").onsubmit=e=>{
+  e.preventDefault(); const p=pinInput.value; if(!p)return;
+  pinErr.textContent="Checking…";
+  checkPin(p).then(ok=>{
+    if(ok===true){pin=p;isAdmin=true;try{localStorage.setItem(PINKEY,p)}catch(e){};modal.classList.remove("open");render();}
+    else pinErr.textContent="Wrong passcode";
+  }).catch(()=>pinErr.textContent="Couldn't reach the server");
+};
+
+if(REMOTE){
+  setStatus("","Connecting…");
+  if(pin) checkPin(pin).then(ok=>{if(ok===true){isAdmin=true;render();}else lock();}).catch(()=>{});
+  pull(); setInterval(pull,5000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)pull();});
+} else setStatus("","Local only");
 render();
 </script>
 </body>
