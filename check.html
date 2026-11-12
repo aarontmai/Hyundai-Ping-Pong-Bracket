@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bracket connection check</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:640px;margin:32px auto;padding:0 16px;color:#0b1f3a;background:#f6f3f2}
+  h1{font-weight:600;font-size:22px;color:#002c5f;margin:0 0 6px}
+  p{color:#5f6f85;font-size:14px;margin:0 0 18px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #c9d2de}
+  td{padding:10px 12px;border-top:1px solid #eef1f5;font-size:14px}
+  td.r{text-align:right;font-weight:600;white-space:nowrap}
+  .ok{color:#1e8e55}.bad{color:#d64545}.wait{color:#8a96a8}
+  small{display:block;color:#8a96a8;font-size:11px}
+  button{margin-top:16px;font:600 13px system-ui;padding:10px 16px;border:1px solid #002c5f;background:#002c5f;color:#fff;cursor:pointer}
+  #copied{margin-left:10px;color:#1e8e55;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Bracket connection check</h1>
+<p>Open this on the computer where the bracket says "Offline". It checks which online services that network lets through. It takes about 10 seconds and doesn't send any of your data.</p>
+<table id="t"></table>
+<button id="copy">Copy results</button><span id="copied"></span>
+
+<script>
+// "cors" checks read a real response, so they can't be fooled by a firewall's block page.
+// "reach" checks only confirm the server answered something.
+const SHEET="https://script.google.com/macros/s/AKfycbzP_3PMgGMFMV6q-Bzx91gpUF_Q-4i9ZW1yH-IntWT0JaCLeuj4Y74KQSwEpgAr1ITPFw/exec";
+const tests=[
+  {name:"Your Google Sheet script (current)", note:"script.google.com", kind:"json", url:SHEET+"?t="+Date.now(), expect:d=>Array.isArray(d.teams)},
+  {name:"GitHub API", note:"api.github.com", kind:"text", url:"https://api.github.com/zen"},
+  {name:"Supabase", note:"supabase.co", kind:"reach", url:"https://api.supabase.com/"},
+  {name:"Firebase Realtime Database", note:"firebaseio.com", kind:"reach", url:"https://firebase-public.firebaseio.com/.json?shallow=true"},
+  {name:"Cloudflare Workers", note:"cloudflare.com", kind:"reach", url:"https://workers.cloudflare.com/"},
+  {name:"Vercel", note:"vercel.app", kind:"reach", url:"https://vercel.com/"},
+  {name:"Netlify", note:"netlify.app", kind:"reach", url:"https://app.netlify.com/"},
+  {name:"Microsoft Graph (Excel/SharePoint)", note:"graph.microsoft.com", kind:"reach", url:"https://graph.microsoft.com/v1.0/$metadata"},
+];
+const t=document.getElementById("t"), results=[];
+function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timed out")),ms))]);}
+tests.forEach((x,i)=>{
+  const tr=t.insertRow(); tr.innerHTML=`<td>${x.name}<small>${x.note}</small></td><td class="r wait">checking…</td>`;
+  const cell=tr.cells[1], started=performance.now();
+  let p;
+  if(x.kind==="reach") p=fetch(x.url,{mode:"no-cors",cache:"no-store"}).then(()=>true);
+  else p=fetch(x.url,{cache:"no-store"}).then(r=>{ if(!r.ok) throw new Error("HTTP "+r.status); return x.kind==="json"?r.json():r.text(); })
+        .then(d=>{ if(x.expect&&!x.expect(d)) throw new Error("unexpected reply"); return true; });
+  withTimeout(p,8000).then(()=>{
+    const ms=Math.round(performance.now()-started);
+    cell.className="r ok"; cell.textContent="Reachable ("+ms+" ms)"; results[i]=x.note+": OK";
+  }).catch(e=>{
+    cell.className="r bad"; cell.textContent="Blocked"; cell.title=String(e); results[i]=x.note+": BLOCKED ("+e.message+")";
+  });
+});
+document.getElementById("copy").onclick=()=>{
+  const text="Bracket check – "+new Date().toLocaleString()+"\n"+tests.map((x,i)=>results[i]||(x.note+": still checking")).join("\n");
+  navigator.clipboard.writeText(text).then(()=>document.getElementById("copied").textContent="Copied – paste it to Claude")
+    .catch(()=>document.getElementById("copied").textContent="Couldn't copy – a screenshot works too");
+};
+</script>
+</body>
+</html>
