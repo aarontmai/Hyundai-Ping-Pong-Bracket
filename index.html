@@ -72,6 +72,8 @@
   .champ .cname{font-size:22px;font-weight:300;color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;min-width:170px;min-height:36px;text-align:center}
   .champ .cname.set{font-weight:700}
   .champ svg{width:44px;height:44px}
+  .champ .emblems{display:flex;align-items:center;gap:14px}
+  .champ .pp-logo{width:52px;height:52px}
   .status{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-right:6px}
   .status i{width:7px;height:7px;border-radius:50%;background:#c9d2de;display:inline-block}
   .status.live i{background:#2bb673}.status.saving i{background:var(--sky)}.status.err i{background:#d64545}
@@ -125,7 +127,18 @@
     <div class="round"><h2>Semifinal</h2><div class="slots abs" id="L3"></div></div>
     <div class="round center"><h2>Final</h2><div class="slots" id="C">
       <div class="champ" id="champ">
-        <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="#002c5f" stroke-width="1.5"/><circle cx="22" cy="22" r="7" fill="#00aad2"/></svg>
+        <div class="emblems">
+          <svg class="pp-logo" viewBox="0 0 64 64" aria-label="Ping pong logo" role="img">
+            <!-- crossed paddles: handles cross below, heads spread apart -->
+            <line x1="44" y1="30" x2="16" y2="58" stroke="#8a96a8" stroke-width="6" stroke-linecap="round"/>
+            <line x1="20" y1="30" x2="48" y2="58" stroke="#8a96a8" stroke-width="6" stroke-linecap="round"/>
+            <circle cx="18" cy="24" r="13" fill="#002c5f"/>
+            <circle cx="46" cy="24" r="13" fill="#00aad2"/>
+            <!-- ball -->
+            <circle cx="32" cy="8" r="5.5" fill="#fff" stroke="#002c5f" stroke-width="1.5"/>
+          </svg>
+          <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="none" stroke="#002c5f" stroke-width="1.5"/><circle cx="22" cy="22" r="7" fill="#00aad2"/></svg>
+        </div>
         <div class="label">Champion</div>
         <div class="cname" id="champName"></div>
       </div>
