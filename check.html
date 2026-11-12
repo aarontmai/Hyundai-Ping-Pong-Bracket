@@ -31,7 +31,7 @@ const tests=[
   {name:"Your Google Sheet script (current)", note:"script.google.com", kind:"json", url:SHEET+"?t="+Date.now(), expect:d=>Array.isArray(d.teams)},
   {name:"GitHub API", note:"api.github.com", kind:"text", url:"https://api.github.com/zen"},
   {name:"Supabase", note:"supabase.co", kind:"reach", url:"https://api.supabase.com/"},
-  {name:"Firebase Realtime Database", note:"firebaseio.com", kind:"reach", url:"https://firebase-public.firebaseio.com/.json?shallow=true"},
+  {name:"Your Firebase database (current)", note:"firebaseio.com", kind:"text", url:"https://ping-pong-61fee-default-rtdb.firebaseio.com/bracket.json"},
   {name:"Cloudflare Workers", note:"cloudflare.com", kind:"reach", url:"https://workers.cloudflare.com/"},
   {name:"Vercel", note:"vercel.app", kind:"reach", url:"https://vercel.com/"},
   {name:"Netlify", note:"netlify.app", kind:"reach", url:"https://app.netlify.com/"},
