@@ -161,21 +161,35 @@
 </div>
 
 <script>
-// ---- Shared storage: Google Sheets via an Apps Script web app. Leave blank for local-only mode. ----
-const SHEET_API = "https://script.google.com/macros/s/AKfycbzP_3PMgGMFMV6q-Bzx91gpUF_Q-4i9ZW1yH-IntWT0JaCLeuj4Y74KQSwEpgAr1ITPFw/exec";
-// -----------------------------------------------------------------------------------------------
-const REMOTE=!!SHEET_API;
+// ---- Shared storage: Firebase Realtime Database (REST). Leave blank for local-only mode. ----
+const FIREBASE_DB = "";   // e.g. https://your-project-default-rtdb.firebaseio.com
+// -------------------------------------------------------------------------------------------
+const REMOTE=!!FIREBASE_DB;
 const KEY="hy-pp-bracket-v3", PINKEY="hy-pp-admin-pin", N=16;
 const blank=()=>({teams:Array(N).fill(""),w:{}});
-const norm=d=>{const t=(d&&Array.isArray(d.teams))?d.teams.slice(0,N):[];while(t.length<N)t.push("");return{teams:t.map(x=>x==null?"":String(x)),w:(d&&d.w&&typeof d.w==="object")?d.w:{}};};
+// Firebase returns teams as an array or an object keyed "0".."15", with empty slots missing
+const norm=d=>{const src=(d&&d.teams)||{},t=[];for(let i=0;i<N;i++){const v=src[i];t.push(v==null?"":String(v));}
+  return{teams:t,w:(d&&d.w&&typeof d.w==="object")?d.w:{}};};
 let state=blank();
 try{state=norm(JSON.parse(localStorage.getItem(KEY)));}catch(e){}
 let pin=null; try{pin=localStorage.getItem(PINKEY);}catch(e){}
 let isAdmin=!REMOTE;
 
-// text/plain body keeps this a "simple" request, which Apps Script accepts cross-origin
-function post(body){return fetch(SHEET_API,{method:"POST",body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();});}
-const checkPin=p=>post({pin:p,check:true}).then(r=>r&&r.ok===true);
+// Tiny Firebase REST client. Resolves true/false for allowed/denied; rejects on network errors.
+function fb(path,method,body){
+  return fetch(FIREBASE_DB.replace(/\/$/,"")+"/"+path+".json",{method,body:body===undefined?undefined:JSON.stringify(body),cache:"no-store"})
+    .then(r=>{ if(r.status===401||r.status===403||r.status===400) return false; if(!r.ok) throw new Error(r.status); return true; });
+}
+const stamp={".sv":"timestamp"};
+const pinKey=p=>encodeURIComponent(p);
+const api={
+  get:()=>fetch(FIREBASE_DB.replace(/\/$/,"")+"/bracket.json",{cache:"no-store"}).then(r=>{if(!r.ok)throw 0;return r.json();}),
+  name:(i,name)=>name?fb("bracket/teams/"+i,"PUT",name.slice(0,40)):fb("bracket/teams/"+i,"DELETE"),
+  results:(p,w)=>fb("","PATCH",{"bracket/w":Object.keys(w).length?w:null,["adminLog/"+p]:stamp}),
+  clear:p=>fb("","PATCH",{"bracket/teams":null,"bracket/w":null,["adminLog/"+p]:stamp}),
+  check:p=>/^[^.#$\[\]\/]+$/.test(p)?fb("adminLog/"+pinKey(p),"PUT",stamp):Promise.resolve(false),
+};
+const checkPin=p=>api.check(p);
 function setStatus(cls,text){const s=document.getElementById("status");s.className="status "+cls;s.querySelector("span").textContent=text;}
 
 const cache=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
@@ -193,8 +207,8 @@ function flushNames(){
   const batch=[...pendingNames.entries()]; pendingNames.clear();
   batch.forEach(([i,name])=>{
     inflight++;
-    post({action:"name",slot:i+1,name}).then(res=>{
-      if(!res||res.ok!==true) throw 0; inflight--; refreshStatus();
+    api.name(i,name).then(ok=>{
+      if(ok!==true) throw 0; inflight--; refreshStatus();
     }).catch(()=>{ inflight--; if(!pendingNames.has(i)) pendingNames.set(i,state.teams[i]); setStatus("err","Not saved – retrying"); clearTimeout(nameTimer); nameTimer=setTimeout(flushNames,3000); });
   });
 }
@@ -205,21 +219,21 @@ const save=()=>{
 };
 function pushResults(){
   const w=JSON.stringify(state.w); inflight++;
-  post({action:"results",pin:pin,w:state.w}).then(res=>{
+  api.results(pin,state.w).then(ok=>{
     inflight--;
-    if(res&&res.ok===true){ if(w===JSON.stringify(state.w)) resultsDirty=false; refreshStatus(); }
+    if(ok===true){ if(w===JSON.stringify(state.w)) resultsDirty=false; refreshStatus(); }
     else { resultsDirty=false; lock(); setStatus("err","Passcode changed"); }
   }).catch(()=>{inflight--;setStatus("err","Not saved – retrying");resultsTimer=setTimeout(pushResults,3000);});
 }
 function clearAll(){
   state={teams:Array(N).fill(""),w:{}}; pendingNames.clear(); cache(); render();
   if(!REMOTE)return; inflight++; refreshStatus();
-  post({action:"clear",pin:pin}).then(res=>{inflight--; if(!res||res.ok!==true){lock();setStatus("err","Passcode changed");} else refreshStatus();})
+  api.clear(pin).then(ok=>{inflight--; if(ok!==true){lock();setStatus("err","Passcode changed");} else refreshStatus();})
     .catch(()=>{inflight--;setStatus("err","Not cleared – try again");});
 }
 function pull(){
   if(!REMOTE)return;
-  fetch(SHEET_API+(SHEET_API.includes("?")?"&":"?")+"t="+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json();}).then(data=>{
+  api.get().then(data=>{
     const inc=norm(data), a=document.activeElement;
     const focused=(a&&a.tagName==="INPUT"&&a.dataset.slot!=null)?+a.dataset.slot:null;
     const next={teams:inc.teams.map((t,i)=>(pendingNames.has(i)||i===focused)?state.teams[i]:t), w:(resultsDirty?state.w:inc.w)};
@@ -352,7 +366,7 @@ document.getElementById("pinForm").onsubmit=e=>{
 if(REMOTE){
   setStatus("","Connecting…");
   if(pin) checkPin(pin).then(ok=>{if(ok===true){isAdmin=true;render();}else lock();}).catch(()=>{});
-  pull(); setInterval(pull,5000);
+  pull(); setInterval(pull,3000);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)pull();});
 } else setStatus("","Local only");
 render();

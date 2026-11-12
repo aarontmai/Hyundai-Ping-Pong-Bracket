@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "bracket": {
+      ".read": true,
+      "teams": {
+        ".write": "newData.parent().parent().child('adminLog').child(root.child('admin').child('pin').val()).val() === now",
+        "$i": {
+          ".write": "$i.matches(/^([0-9]|1[0-5])$/)",
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        }
+      },
+      "w": {
+        ".write": "newData.parent().parent().child('adminLog').child(root.child('admin').child('pin').val()).val() === now"
+      },
+      "$other": { ".validate": false }
+    },
+    "adminLog": {
+      "$p": {
+        ".write": "$p === root.child('admin').child('pin').val()",
+        ".validate": "newData.val() === now"
+      }
+    }
+  }
+}
