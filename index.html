@@ -81,18 +81,6 @@
   .status i{width:7px;height:7px;border-radius:50%;background:#c9d2de;display:inline-block}
   .status.live i{background:#2bb673}.status.saving i{background:var(--sky)}.status.err i{background:#d64545}
   .controls{align-items:center;flex-wrap:wrap;justify-content:flex-end}
-  .viewer .admin-only{display:none}
-  .viewer .adv{display:none}
-  .modal{position:fixed;inset:0;background:#0b1f3a66;z-index:20;display:none;align-items:center;justify-content:center;padding:16px}
-  .modal.open{display:flex}
-  .modal form{background:#fff;padding:22px;width:min(340px,100%);border-top:3px solid var(--navy)}
-  .modal h3{margin:0 0 4px;font-weight:600;color:var(--navy)}
-  .modal p{margin:0 0 14px;font-size:13px;color:var(--muted)}
-  .modal input{width:100%;font:15px Inter,sans-serif;padding:10px;border:1px solid var(--line);outline:0}
-  .modal input:focus{border-color:var(--sky)}
-  .modal .err{color:#d64545;font-size:12px;min-height:16px;margin:6px 0 0}
-  .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-  .modal .primary{background:var(--navy);color:#fff}
 </style>
 </head>
 <body>
@@ -114,13 +102,12 @@
   </div>
   <div class="controls">
     <span class="status" id="status"><i></i><span>Local</span></span>
-    <button id="resetBtn" class="admin-only">Reset results</button>
-    <button id="clearBtn" class="admin-only">Clear bracket</button>
-    <button id="adminBtn">Admin</button>
+    <button id="resetBtn">Reset results</button>
+    <button id="clearBtn">Clear bracket</button>
   </div>
 </header>
 <div class="rule"><div></div></div>
-<p class="hint" id="hint">Type all 16 team names in Round 1 · tap the circle to advance a team</p>
+<p class="hint" id="hint">Type team names in the Round of 16 · tap the circle next to a team to advance it · changes save for everyone</p>
 
 <div class="scroller">
   <div class="bracket" id="bracket">
@@ -153,46 +140,33 @@
   </div>
 </div>
 
-<div class="modal" id="modal">
-  <form id="pinForm">
-    <h3>Admin access</h3>
-    <p>Enter the passcode to edit names and results.</p>
-    <input type="password" id="pinInput" autocomplete="current-password" placeholder="Passcode">
-    <div class="err" id="pinErr"></div>
-    <div class="row"><button type="button" id="pinCancel">Cancel</button><button type="submit" class="primary">Unlock</button></div>
-  </form>
-</div>
 
 <script>
 // ---- Shared storage: Firebase Realtime Database (REST). Leave blank for local-only mode. ----
 const FIREBASE_DB = "https://ping-pong-61fee-default-rtdb.firebaseio.com";   // e.g. https://your-project-default-rtdb.firebaseio.com
 // -------------------------------------------------------------------------------------------
 const REMOTE=!!FIREBASE_DB;
-const KEY="hy-pp-bracket-v3", PINKEY="hy-pp-admin-pin", N=16;
+const KEY="hy-pp-bracket-v3", N=16;
 const blank=()=>({teams:Array(N).fill(""),w:{}});
 // Firebase returns teams as an array or an object keyed "0".."15", with empty slots missing
 const norm=d=>{const src=(d&&d.teams)||{},t=[];for(let i=0;i<N;i++){const v=src[i];t.push(v==null?"":String(v));}
   return{teams:t,w:(d&&d.w&&typeof d.w==="object")?d.w:{}};};
 let state=blank();
 try{state=norm(JSON.parse(localStorage.getItem(KEY)));}catch(e){}
-let pin=null; try{pin=localStorage.getItem(PINKEY);}catch(e){}
-let isAdmin=!REMOTE;
 
 // Tiny Firebase REST client. Resolves true/false for allowed/denied; rejects on network errors.
 function fb(path,method,body){
   return fetch(FIREBASE_DB.replace(/\/$/,"")+"/"+path+".json",{method,body:body===undefined?undefined:JSON.stringify(body),cache:"no-store"})
     .then(r=>{ if(r.status===401||r.status===403||r.status===400) return false; if(!r.ok) throw new Error(r.status); return true; });
 }
-const stamp={".sv":"timestamp"};
-const pinKey=p=>encodeURIComponent(p);
 const api={
   get:()=>fetch(FIREBASE_DB.replace(/\/$/,"")+"/bracket.json",{cache:"no-store"}).then(r=>{if(!r.ok)throw 0;return r.json();}),
   name:(i,name)=>name?fb("bracket/teams/"+i,"PUT",name.slice(0,40)):fb("bracket/teams/"+i,"DELETE"),
-  results:(p,w)=>fb("","PATCH",{"bracket/w":Object.keys(w).length?w:null,["adminLog/"+p]:stamp}),
-  clear:p=>fb("","PATCH",{"bracket/teams":null,"bracket/w":null,["adminLog/"+p]:stamp}),
-  check:p=>/^[^.#$\[\]\/]+$/.test(p)?fb("adminLog/"+pinKey(p),"PUT",stamp):Promise.resolve(false),
+  // only the matches that changed are sent, so two people advancing different games don't overwrite each other
+  results:changes=>fb("bracket/w","PATCH",changes),
+  resetResults:()=>fb("bracket/w","DELETE"),
+  clear:()=>fb("bracket","DELETE"),
 };
-const checkPin=p=>api.check(p);
 function setStatus(cls,text){const s=document.getElementById("status");s.className="status "+cls;s.querySelector("span").textContent=text;}
 
 const cache=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
@@ -215,30 +189,36 @@ function flushNames(){
     }).catch(()=>{ inflight--; if(!pendingNames.has(i)) pendingNames.set(i,state.teams[i]); setStatus("err","Not saved – retrying"); clearTimeout(nameTimer); nameTimer=setTimeout(flushNames,3000); });
   });
 }
-// Results (who advanced) need the admin passcode
+// Results (who advanced): anyone can change them
+let syncedW={};
 const save=()=>{
-  cache(); if(!REMOTE||!isAdmin)return;
-  resultsDirty=true; refreshStatus(); clearTimeout(resultsTimer); resultsTimer=setTimeout(pushResults,450);
+  cache(); if(!REMOTE)return;
+  resultsDirty=true; refreshStatus(); clearTimeout(resultsTimer); resultsTimer=setTimeout(pushResults,350);
 };
 function pushResults(){
-  const w=JSON.stringify(state.w); inflight++;
-  api.results(pin,state.w).then(ok=>{
+  const changes={}, target=JSON.parse(JSON.stringify(state.w));
+  new Set([...Object.keys(syncedW),...Object.keys(target)]).forEach(k=>{ if(syncedW[k]!==target[k]) changes[k]=target[k]===undefined?null:target[k]; });
+  if(!Object.keys(changes).length){resultsDirty=false;refreshStatus();return;}
+  const req=Object.keys(target).length?api.results(changes):api.resetResults();
+  inflight++;
+  req.then(ok=>{
     inflight--;
-    if(ok===true){ if(w===JSON.stringify(state.w)) resultsDirty=false; refreshStatus(); }
-    else { resultsDirty=false; lock(); setStatus("err","Passcode changed"); }
-  }).catch(()=>{inflight--;setStatus("err","Not saved – retrying");resultsTimer=setTimeout(pushResults,3000);});
+    if(ok!==true) throw 0;
+    syncedW=target; if(JSON.stringify(target)===JSON.stringify(state.w)) resultsDirty=false; refreshStatus();
+  }).catch(()=>{setStatus("err","Not saved – retrying");resultsTimer=setTimeout(pushResults,3000);});
 }
 function clearAll(){
-  state={teams:Array(N).fill(""),w:{}}; pendingNames.clear(); cache(); render();
+  state={teams:Array(N).fill(""),w:{}}; pendingNames.clear(); clearTimeout(resultsTimer); resultsDirty=false; cache(); render();
   if(!REMOTE)return; inflight++; refreshStatus();
-  api.clear(pin).then(ok=>{inflight--; if(ok!==true){lock();setStatus("err","Passcode changed");} else refreshStatus();})
-    .catch(()=>{inflight--;setStatus("err","Not cleared – try again");});
+  api.clear().then(ok=>{inflight--; if(ok!==true) throw 0; syncedW={}; refreshStatus();})
+    .catch(()=>{setStatus("err","Not cleared – try again");});
 }
 function pull(){
   if(!REMOTE)return;
   api.get().then(data=>{
     const inc=norm(data), a=document.activeElement;
     const focused=(a&&a.tagName==="INPUT"&&a.dataset.slot!=null)?+a.dataset.slot:null;
+    if(!resultsDirty) syncedW=JSON.parse(JSON.stringify(inc.w));
     const next={teams:inc.teams.map((t,i)=>(pendingNames.has(i)||i===focused)?state.teams[i]:t), w:(resultsDirty?state.w:inc.w)};
     if(!busy()) setStatus("live","Live");
     if(JSON.stringify(next)===JSON.stringify(state))return;
@@ -305,10 +285,6 @@ function render(){
       col.appendChild(el);
     }
   }
-  document.body.classList.toggle("viewer",!isAdmin);
-  document.getElementById("adminBtn").textContent=isAdmin?"Lock":"Admin";
-  document.getElementById("adminBtn").style.display=REMOTE?"":"none";
-  document.getElementById("hint").textContent=isAdmin?"Type all 16 team names in Round 1 · tap the circle to advance a team":"Type your team's name in an open Round of 16 slot · it saves for everyone";
   updateChamp(); layout(); requestAnimationFrame(links);
 }
 // Place each later-round match midway between the matches that feed it
@@ -349,26 +325,8 @@ function twoTap(btn,text,fn){let armed=false,t;btn.onclick=()=>{
   clearTimeout(t);armed=false;btn.textContent=text;fn();}}
 twoTap(document.getElementById("resetBtn"),"Reset results",()=>{state.w={};save();render();});
 twoTap(document.getElementById("clearBtn"),"Clear bracket",clearAll);
-// Admin unlock
-const modal=document.getElementById("modal"), pinInput=document.getElementById("pinInput"), pinErr=document.getElementById("pinErr");
-function lock(){isAdmin=false;pin=null;try{localStorage.removeItem(PINKEY)}catch(e){}render();}
-document.getElementById("adminBtn").onclick=()=>{
-  if(isAdmin){lock();return;}
-  pinErr.textContent="";pinInput.value="";modal.classList.add("open");setTimeout(()=>pinInput.focus(),50);
-};
-document.getElementById("pinCancel").onclick=()=>modal.classList.remove("open");
-document.getElementById("pinForm").onsubmit=e=>{
-  e.preventDefault(); const p=pinInput.value; if(!p)return;
-  pinErr.textContent="Checking…";
-  checkPin(p).then(ok=>{
-    if(ok===true){pin=p;isAdmin=true;try{localStorage.setItem(PINKEY,p)}catch(e){};modal.classList.remove("open");render();}
-    else pinErr.textContent="Wrong passcode";
-  }).catch(()=>pinErr.textContent="Couldn't reach the server");
-};
-
 if(REMOTE){
   setStatus("","Connecting…");
-  if(pin) checkPin(pin).then(ok=>{if(ok===true){isAdmin=true;render();}else lock();}).catch(()=>{});
   pull(); setInterval(pull,3000);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)pull();});
 } else setStatus("","Local only");
