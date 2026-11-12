@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="rotate(-40 30 34)">
+    <!-- handle: wide, short, with a grip band where it meets the blade -->
+    <rect x="23" y="40" width="14" height="22" rx="5" fill="#8a96a8"/>
+    <rect x="23" y="40" width="14" height="6" fill="#5f6f85"/>
+    <!-- blade -->
+    <ellipse cx="30" cy="24" rx="19" ry="20" fill="#002c5f"/>
+  </g>
+  <!-- ball -->
+  <circle cx="51" cy="11" r="7.5" fill="#00aad2"/>
+</svg>
