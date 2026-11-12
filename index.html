@@ -110,7 +110,7 @@
   <div class="controls">
     <span class="status" id="status"><i></i><span>Local</span></span>
     <button id="resetBtn" class="admin-only">Reset results</button>
-    <button id="clearBtn" class="admin-only">Clear names</button>
+    <button id="clearBtn" class="admin-only">Clear bracket</button>
     <button id="adminBtn">Admin</button>
   </div>
 </header>
@@ -158,37 +158,66 @@ const norm=d=>{const t=(d&&Array.isArray(d.teams))?d.teams.slice(0,N):[];while(t
 let state=blank();
 try{state=norm(JSON.parse(localStorage.getItem(KEY)));}catch(e){}
 let pin=null; try{pin=localStorage.getItem(PINKEY);}catch(e){}
-let isAdmin=!REMOTE, dirty=false, saveTimer=null, lastRemote=null;
+let isAdmin=!REMOTE;
 
 // text/plain body keeps this a "simple" request, which Apps Script accepts cross-origin
 function post(body){return fetch(SHEET_API,{method:"POST",body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();});}
 const checkPin=p=>post({pin:p,check:true}).then(r=>r&&r.ok===true);
 function setStatus(cls,text){const s=document.getElementById("status");s.className="status "+cls;s.querySelector("span").textContent=text;}
 
+const cache=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
+let pendingNames=new Map(), nameTimer=null, resultsDirty=false, resultsTimer=null, inflight=0;
+function busy(){return pendingNames.size>0||resultsDirty||inflight>0;}
+function refreshStatus(){ if(busy()) setStatus("saving","Saving…"); else setStatus("live","Saved"); }
+
+// Anyone can edit a team name: each slot is saved on its own so people don't overwrite each other
+function saveName(i){
+  cache(); if(!REMOTE)return;
+  pendingNames.set(i,state.teams[i]); refreshStatus();
+  clearTimeout(nameTimer); nameTimer=setTimeout(flushNames,600);
+}
+function flushNames(){
+  const batch=[...pendingNames.entries()]; pendingNames.clear();
+  batch.forEach(([i,name])=>{
+    inflight++;
+    post({action:"name",slot:i+1,name}).then(res=>{
+      if(!res||res.ok!==true) throw 0; inflight--; refreshStatus();
+    }).catch(()=>{ inflight--; if(!pendingNames.has(i)) pendingNames.set(i,state.teams[i]); setStatus("err","Not saved – retrying"); clearTimeout(nameTimer); nameTimer=setTimeout(flushNames,3000); });
+  });
+}
+// Results (who advanced) need the admin passcode
 const save=()=>{
-  try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}
-  if(!REMOTE||!isAdmin)return;
-  dirty=true; setStatus("saving","Saving…"); clearTimeout(saveTimer);
-  saveTimer=setTimeout(push,450);
+  cache(); if(!REMOTE||!isAdmin)return;
+  resultsDirty=true; refreshStatus(); clearTimeout(resultsTimer); resultsTimer=setTimeout(pushResults,450);
 };
-function push(){
-  const snapshot=JSON.parse(JSON.stringify(state));
-  post({pin:pin,data:snapshot}).then(res=>{
-    if(res&&res.ok===true){ if(JSON.stringify(snapshot)===JSON.stringify(state)){dirty=false;lastRemote=JSON.stringify(snapshot);} setStatus("live","Saved"); }
-    else { lock(); setStatus("err","Passcode changed"); }
-  }).catch(()=>{setStatus("err","Not saved – retrying");saveTimer=setTimeout(push,3000);});
+function pushResults(){
+  const w=JSON.stringify(state.w); inflight++;
+  post({action:"results",pin:pin,w:state.w}).then(res=>{
+    inflight--;
+    if(res&&res.ok===true){ if(w===JSON.stringify(state.w)) resultsDirty=false; refreshStatus(); }
+    else { resultsDirty=false; lock(); setStatus("err","Passcode changed"); }
+  }).catch(()=>{inflight--;setStatus("err","Not saved – retrying");resultsTimer=setTimeout(pushResults,3000);});
+}
+function clearAll(){
+  state={teams:Array(N).fill(""),w:{}}; pendingNames.clear(); cache(); render();
+  if(!REMOTE)return; inflight++; refreshStatus();
+  post({action:"clear",pin:pin}).then(res=>{inflight--; if(!res||res.ok!==true){lock();setStatus("err","Passcode changed");} else refreshStatus();})
+    .catch(()=>{inflight--;setStatus("err","Not cleared – try again");});
 }
 function pull(){
   if(!REMOTE)return;
   fetch(SHEET_API+(SHEET_API.includes("?")?"&":"?")+"t="+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json();}).then(data=>{
-    const incoming=JSON.stringify(norm(data));
-    if(!dirty) setStatus("live","Live");
-    if(dirty||incoming===lastRemote)return;
-    const a=document.activeElement; if(a&&a.tagName==="INPUT"&&a.closest("#bracket"))return;
-    lastRemote=incoming; state=JSON.parse(incoming);
-    try{localStorage.setItem(KEY,incoming)}catch(e){}
+    const inc=norm(data), a=document.activeElement;
+    const focused=(a&&a.tagName==="INPUT"&&a.dataset.slot!=null)?+a.dataset.slot:null;
+    const next={teams:inc.teams.map((t,i)=>(pendingNames.has(i)||i===focused)?state.teams[i]:t), w:(resultsDirty?state.w:inc.w)};
+    if(!busy()) setStatus("live","Live");
+    if(JSON.stringify(next)===JSON.stringify(state))return;
+    state=next; cache();
+    // re-render without kicking someone out of the box they're typing in
+    let sel=null; if(focused!=null){try{sel=[a.selectionStart,a.selectionEnd];}catch(e){}}
     render();
-  }).catch(()=>{ if(!dirty) setStatus("err","Offline"); });
+    if(focused!=null){const el=document.querySelector(`input[data-slot="${focused}"]`); if(el){el.focus(); if(sel)try{el.setSelectionRange(sel[0],sel[1]);}catch(e){}}}
+  }).catch(()=>{ if(!busy()) setStatus("err","Offline"); });
 }
 
 const M={
@@ -215,10 +244,11 @@ function row(id,src,i,ents){
   if(!seed){ r.classList.add("tbd"); r.innerHTML='<span class="name">—</span><button class="adv"></button>'; return r; }
   if(w) r.classList.add(w===seed?"win":"lose"); else if(!ready) r.classList.add("wait");
   r.innerHTML="";
-  if(src.seed&&isAdmin){ // editable entry slot
+  if(src.seed){ // editable entry slot – open to everyone
     const inp=document.createElement("input"); inp.className="name"; inp.placeholder="Team name"; inp.maxLength=30;
     inp.value=state.teams[seed-1];
-    inp.oninput=()=>{state.teams[seed-1]=inp.value; save(); syncNames(seed);};
+    inp.dataset.slot=seed-1;
+    inp.oninput=()=>{state.teams[seed-1]=inp.value; saveName(seed-1); syncNames(seed);};
     r.appendChild(inp);
   } else {
     const s=document.createElement("span"); s.className="name"; s.dataset.seed=seed; s.textContent=label(seed); r.appendChild(s);
@@ -248,7 +278,7 @@ function render(){
   document.body.classList.toggle("viewer",!isAdmin);
   document.getElementById("adminBtn").textContent=isAdmin?"Lock":"Admin";
   document.getElementById("adminBtn").style.display=REMOTE?"":"none";
-  document.getElementById("hint").textContent=isAdmin?"Type all 16 team names in Round 1 · tap the circle to advance a team":"Live bracket · updates automatically";
+  document.getElementById("hint").textContent=isAdmin?"Type all 16 team names in Round 1 · tap the circle to advance a team":"Type your team's name in an open Round of 16 slot · it saves for everyone";
   updateChamp(); layout(); requestAnimationFrame(links);
 }
 // Place each later-round match midway between the matches that feed it
@@ -288,7 +318,7 @@ function twoTap(btn,text,fn){let armed=false,t;btn.onclick=()=>{
   if(!armed){armed=true;btn.textContent="Tap again to confirm";t=setTimeout(()=>{armed=false;btn.textContent=text},2500);return;}
   clearTimeout(t);armed=false;btn.textContent=text;fn();}}
 twoTap(document.getElementById("resetBtn"),"Reset results",()=>{state.w={};save();render();});
-twoTap(document.getElementById("clearBtn"),"Clear names",()=>{state.teams=Array(N).fill("");state.w={};save();render();});
+twoTap(document.getElementById("clearBtn"),"Clear bracket",clearAll);
 // Admin unlock
 const modal=document.getElementById("modal"), pinInput=document.getElementById("pinInput"), pinErr=document.getElementById("pinErr");
 function lock(){isAdmin=false;pin=null;try{localStorage.removeItem(PINKEY)}catch(e){}render();}

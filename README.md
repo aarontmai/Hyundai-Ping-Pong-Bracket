@@ -7,7 +7,7 @@ Live: https://aarontmai.github.io/Hyundai-Ping-Pong-Bracket/
 ## Shared saving (Google Sheets)
 
 Names and results are stored in a Google Sheet so everyone with the link sees the same bracket.
-Only someone with the admin passcode can edit.
+Anyone can type team names; only someone with the admin passcode can advance winners or clear the bracket.
 
 1. Create a Google Sheet → **Extensions → Apps Script**.
 2. Paste `apps-script/Code.gs`, set `ADMIN_PASSCODE`, and save.
